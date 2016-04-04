@@ -34,6 +34,9 @@
   pelas diferentes threads? Qual é o valor esperado para a variável x após o
   término do aplicativo? Se não houver mutex, qual será o valor final da
   variável global x (ou sua distribuição de probabilidade)?
+  
+  // Observação: Uma thread pertence a um processo, e não que ela "está" num processo.
+  // As threads só "disputam" por local de memória ao tentar acesso a uma região crítica.
 
   No IC1 a variável count não era global. Porém como se tratava de criação de
   processos filhos, cujas funções era incrementar uma variável count e depois
@@ -51,6 +54,10 @@
   para ver quem incrementa sobre a variável count, pois cada processo é uma
   cópia do processo pai (com pid diferente) e está executando paralelamente se
   possível e em outro local da memória.
+  
+  // Observação: Está errado dizer que outra thread pode acessar para leitura e
+  // não para gravação. Quando você faz lock no mutex você está bloqueando apenas
+  // as threads que farão gravação, e não leitura? É claro que não.
 
   Já nesse exercício do IC3 o caso é diferente. As threads estão no mesmo
   processo disputando pelo mesmo local na memória. Quando uma thread se atrela
