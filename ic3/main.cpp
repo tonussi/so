@@ -125,19 +125,27 @@
 
 using namespace std;
 
-/* declare a mutex */ pthread_mutex_t mymutex;
+/* declare a mutex */
+pthread_mutex_t mymutexA, mymutexB;
 
 void *inc_(void *void_ptr)
 {
 	/* increment x to 100 */
-	int *ptr = (int *) void_ptr;
-	int i = 0;
-	for (; i < 100; i++)
+	int *ptr = (int *)void_ptr;
+	int i=0;
+	for (; i<100; i++)
 	{
 		/* enter critical region */
-    pthread_mutex_lock(&mymutex);
+		pthread_mutex_lock(&mymutexA);
+		while(pthread_mutex_trylock(&mymutexB)) {
+		    pthread_mutex_unlock(&mymutexA);
+		    /* stall region */
+		    pthread_mutex_lock(&mymutexA);
+		}
 		++(*ptr);
-    pthread_mutex_unlock(&mymutex);
+		cout << "Thread(A) está Incrementando" << endl;
+		pthread_mutex_unlock(&mymutexA);
+		pthread_mutex_unlock(&mymutexB);
 		/* leave critical region */
 	}
 	cout << "increment finished" << endl;
@@ -146,57 +154,66 @@ void *inc_(void *void_ptr)
 
 void *dec_(void *void_ptr)
 {
-  /* decrement x to 100 */
-  int *ptr = (int *) void_ptr;
-	int i=0;
-	for (; i<100; i++)
-	{
+    /* decrement x to 100 */
+    int *ptr = (int *)void_ptr;
+    int i=0;
+    for (; i<100; i++)
+    {
 		/* enter critical region */
-    pthread_mutex_lock(&mymutex);
-    --(*ptr);
-    pthread_mutex_unlock(&mymutex);
+		pthread_mutex_lock(&mymutexB);
+		while(pthread_mutex_trylock(&mymutexA)) {
+		    pthread_mutex_unlock(&mymutexB);
+		    /* stall region */
+		    pthread_mutex_lock(&mymutexB);
+		}
+		--(*ptr);
+		cout << "Thread(A) está Decrementando" << endl;
+		pthread_mutex_unlock(&mymutexB);
+		pthread_mutex_unlock(&mymutexA);
 		/* leave critical region */
 	}
-  cout << "decrement finished" << endl;
-  return NULL;
+	cout << "decrement finished" << endl;
+	return NULL;
 }
 
 
 int main()
 {
-	int x = 0, status_inc_thread, status_dec_thread;
-	cout << "x: " << x << endl;
+    int x = 0, status_inc_thread, status_dec_thread;
+    cout << "x: " << x << endl;
 
-	/* declare threads */ pthread_t inc_thread, dec_thread;
+    /* declare threads */
+    pthread_t inc_thread, dec_thread;
 
-	/* init mutexes */
-  mymutex = PTHREAD_MUTEX_INITIALIZER;
+    /* init mutexex */
+    mymutexA = PTHREAD_MUTEX_INITIALIZER;
+    mymutexB = PTHREAD_MUTEX_INITIALIZER;
 
-  /* create a first thread which executes inc_(&x) */
-  status_inc_thread = pthread_create(&inc_thread, NULL, inc_, &x);
-  if (status_inc_thread) {
-    cerr << "Error - pthread_create() return code: " << status_inc_thread << endl;
-    exit(EXIT_FAILURE);
-  }
+    /* create a first thread which executes inc_(&x) */
+    status_inc_thread = pthread_create(&inc_thread, NULL, inc_, &x);
+    if (status_inc_thread) {
+        cerr << "Error - pthread_create() return code: " << status_inc_thread << endl;
+    }
 
-	/* create a second thread which executes dec_(&x) */
-  status_dec_thread = pthread_create(&dec_thread, NULL, dec_, &x);
-  if (status_dec_thread) {
-    cerr << "Error - pthread_create() return code: " << status_inc_thread << endl;
-    exit(EXIT_FAILURE);
-  }
+    /* create a second thread which executes dec_(&x) */
+    status_dec_thread = pthread_create(&dec_thread, NULL, dec_, &x);
+    if (status_dec_thread) {
+        cerr << "Error - pthread_create() return code: " << status_dec_thread << endl;
+    }
 
-  /* wait for the first thread to finish */
-  // Function call: pthread_join - wait for termination of another thread
-  pthread_join(dec_thread, NULL);
 
-	/* wait for the second thread to finish */
-  pthread_join(inc_thread, NULL);
 
-	/* destroy mutex */
-  pthread_mutex_destroy(&mymutex);
+    /* wait for the first thread to finish */
+    pthread_join(inc_thread, NULL);
 
-	cout << "x: " << x << endl;
 
-	return 0;
+    /* wait for the second thread to finish */
+    pthread_join(dec_thread, NULL);
+
+    /* destroy mutex */
+    pthread_mutex_destroy(&mymutexA);
+    pthread_mutex_destroy(&mymutexB);
+
+    cout << "x: " << x << endl;
+    return 0;
 }
