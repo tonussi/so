@@ -13,15 +13,15 @@
  * \5 A variável global deve ser acessada para escrita com condição de exclusão
  *    mutua.
  *
- * \6 6.1 pthread_mutex_lock,
- *    6.2 pthread_mutex_unlock,
- *    6.3 pthread_mutex_init,
- *    6.4 pthread_create,
- *    6.5 thread_join,
- *    6.6 pthread_mutex_destroy
+ * \6 +6.1 pthread_mutex_lock,
+ *    +6.2 pthread_mutex_unlock,
+ *    +6.3 pthread_mutex_init,
+ *    +6.4 pthread_create,
+ *    +6.5 thread_join,
+ *    +6.6 pthread_mutex_destroy
  *
- * \7 \7.1 pthread_t
- *    \7.2 pthread_mutex_t
+ * \7 +7.1 pthread_t
+ *    +7.2 pthread_mutex_t
  *
  *
  * Observação: Do jeito que o enunciado está escrito, eu extraí que a princípio
@@ -61,12 +61,39 @@
  * que o local de memória está livre para ser gravado por outrem, e vice versa.
  *
  * Com mutex é possível prever probabilísticamente os resultados finais.
- * Sem mutex não é possível prever os resultados finais.
+ * Se as regiões críticas são protegidas por mutexes então eu consigo saber que
+ * ou a sequẽncia de execução é ++(*ptr) seguida de --(*ptr) OU é o contrário.¹
+ *
+ * Outra situação é que se ambos os ++(*ptr) e --(*ptr) estão sobre a guarda de
+ * mutexes lock e unlock, então esses mesmos irão sinalizar para a SO que o
+ * escalonador preemptivo não deve trocar o contexto da Thread A para a Thread B
+ * quando o Temporizador der um tick() interrompendo a SO para que ela troque o
+ * contexto do fluxo de execução.¹ Se a Thread A está no meio da execução de
+ * ++(*ptr) e o Sistema Operacional troca o contexto de execução para a Thread B é
+ * porquê não existe Trava de segurança (Mutex) impedindo que o Contexto seja
+ * trocado, pelo menos na região que é crítica para a operação de incremento da
+ * variável global, assim como a de decremento.¹
+ *
+ * Condição de Corrida é um termo usado para designar uma operação de escrita
+ * por Threads sobre um mesmo local de memória que não está protegido por
+ * Mutexes. Se esse local de memória está devidamente protegido com exclusão
+ * mutua então não deverá ocorrer condição de corrida (race condition).¹
+ *
+ * Sem mutex não é possível prever os resultados finais. Eu não consigo prever
+ * com exatidão quem que segue quem, se é ++(*ptr) ou --(*ptr), ou o contrário.
+ * ou dois ++(*ptr) seguidos e depois 3 --(*ptr) seguidos. Eu não posso acreditar
+ * que a SO vai especialmente cuidar de regiões críticas para mim. Eu tenho que
+ * me preocupar em programar corretamente para que a SO não execute código que
+ * acessa memória sem regras.
+ *
+ * Referências
+ * ¹ Race Conditions: Revisited
+ *   <https://www.cs.mtu.edu/~shene/NSF-3/e-Book/RACE/overview.html>
  */
 
 using namespace std;
 
-/* declare a mutex */ mymutex;
+/* declare a mutex */ pthread_mutex_t mymutex;
 
 void *inc_(void *void_ptr)
 {
@@ -76,7 +103,9 @@ void *inc_(void *void_ptr)
 	for (; i < 100; i++)
 	{
 		/* enter critical region */
+    pthread_mutex_lock(&mymutex);
 		++(*ptr);
+    pthread_mutex_unlock(&mymutex);
 		/* leave critical region */
 	}
 	cout << "increment finished" << endl;
@@ -86,12 +115,14 @@ void *inc_(void *void_ptr)
 void *dec_(void *void_ptr)
 {
   /* decrement x to 100 */
-  int *ptr = (int *)void_ptr;
+  int *ptr = (int *) void_ptr;
 	int i=0;
 	for (; i<100; i++)
 	{
 		/* enter critical region */
-		--(*ptr);
+    pthread_mutex_lock(&mymutex);
+    --(*ptr);
+    pthread_mutex_unlock(&mymutex);
 		/* leave critical region */
 	}
   cout << "decrement finished" << endl;
@@ -101,22 +132,37 @@ void *dec_(void *void_ptr)
 
 int main()
 {
-	int x = 0;
+	int x = 0, status_inc_thread, status_dec_thread;
 	cout << "x: " << x << endl;
 
-	/* declare threads */ inc_thread, dec_thread;
+	/* declare threads */ pthread_t inc_thread, dec_thread;
 
-	/* init mutexex */
+	/* init mutexes */
+  mymutex = PTHREAD_MUTEX_INITIALIZER;
 
   /* create a first thread which executes inc_(&x) */
+  status_inc_thread = pthread_create(&inc_thread, NULL, inc_, &x);
+  if (status_inc_thread) {
+    cerr << "Error - pthread_create() return code: " << status_inc_thread << endl;
+    exit(EXIT_FAILURE);
+  }
 
 	/* create a second thread which executes dec_(&x) */
+  status_dec_thread = pthread_create(&dec_thread, NULL, dec_, &x);
+  if (status_dec_thread) {
+    cerr << "Error - pthread_create() return code: " << status_inc_thread << endl;
+    exit(EXIT_FAILURE);
+  }
 
   /* wait for the first thread to finish */
+  // Function call: pthread_join - wait for termination of another thread
+  pthread_join(dec_thread, NULL);
 
 	/* wait for the second thread to finish */
+  pthread_join(inc_thread, NULL);
 
 	/* destroy miutex */
+  pthread_mutex_destroy(&mymutex);
 
 	cout << "x: " << x << endl;
 
