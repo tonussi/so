@@ -34,17 +34,27 @@ aplicativo? Se não houver mutex, qual será o valor final da variável global x
 
   Vocês acham essa modificação/implementação do IC3 válida para multicores?
 
-  PROC_1 1 pthread_mutex_lock(&mutexA);                   // Tenta travar o
-  mutexA 2 while (pthread_mutex_trylock(&mutexB))    // Espera até que mutexB de
-  unlock 3 { 4    pthread_mutex_unlock(&mutexA);           // Libera o mutexA
-  para evitar Deadlock 5    pthread_mutex_lock(&mutexA);               // Trava
-  o mutexA 6 } 7 ++(*ptr);                                                        //
-  Faz o incremento 8 pthread_mutex_unlock(&mutexA);              // Destrava o
-  mutexA 9 pthread_mutex_unlock(&mutexB);              // Destrava o mutexB
+  PROC_1
+  1 pthread_mutex_lock(&mutexA); // Tenta travar o mutexA
+  2 while (pthread_mutex_trylock(&mutexB)) // Espera até que mutexB de unlock
+  3 {
+  4    pthread_mutex_unlock(&mutexA); // Libera o mutexA para evitar Deadlock
+  5    pthread_mutex_lock(&mutexA); // Trava o mutexA
+  6 }
+  7 ++(*ptr); // Faz o incremento
+  8 pthread_mutex_unlock(&mutexA); // Destrava o mutexA
+  9 pthread_mutex_unlock(&mutexB); // Destrava o mutexB
 
-  PROC_2 1 pthread_mutex_lock(&mutexB); 2 while (pthread_mutex_trylock(&mutexA))
-  3 { 4    pthread_mutex_unlock(&mutexB); 5    pthread_mutex_lock(&mutexB); 6 }
-  7 --(*ptr); 8 pthread_mutex_unlock(&mutexB); 9 pthread_mutex_unlock(&mutexA);
+  PROC_2
+  1 pthread_mutex_lock(&mutexB);
+  2 while (pthread_mutex_trylock(&mutexA))
+  3 {
+  4    pthread_mutex_unlock(&mutexB);
+  5    pthread_mutex_lock(&mutexB);
+  6 }
+  7 --(*ptr);
+  8 pthread_mutex_unlock(&mutexB);
+  9 pthread_mutex_unlock(&mutexA);
 
   Com mutex é possível prever probabilísticamente os resultados finais. Se as
   regiões críticas são protegidas por mutexes então eu consigo saber que ou a
@@ -79,4 +89,4 @@ aplicativo? Se não houver mutex, qual será o valor final da variável global x
   <https://www.cs.mtu.edu/~shene/NSF-3/e-Book/RACE/overview.html>
 
   ² POSIX thread (pthread) libraries - Thread Pitfalls
-  <http://www.yolinux.com/TUTORIALS/LinuxTutorialPosixThreads.html> 
+  <http://www.yolinux.com/TUTORIALS/LinuxTutorialPosixThreads.html>
