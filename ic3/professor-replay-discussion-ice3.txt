@@ -1,0 +1,83 @@
+Apenas algumas colocações:
+
+  "As threads estão no mesmo  processo disputando pelo mesmo local na memória."
+
+Eu diria que uma thread pertence a um processo, e não que ela "está" num
+processo. As threads só "disputam" por local de memória ao tentar acesso a uma
+região crítica
+
+"Quando uma thread se atrela  àquele local de memória que diz respeito à
+variável global count a outra thread pode tentar acessar para leitura esse
+local, mas não pode acessar para gravação,"
+
+ Não entendo o que significa dizer que uma thread" se atrela àquele local de
+ memória. Está errado dizer que que outra thread pode acessar para leitura e não
+ para gravação. Quando você faz lock no mutex você está bloqueando apenas as
+ threads que farão gravação, e não leitura? É claro que não.
+
+ "isto é, ela deverá ficar tentando try { ... } catch { std::exception &e { ... }
+ até que a outra thread sinalize uma flag dizendo que o local de memória está
+ livre para ser gravado por outrem, e vice versa."
+
+Por que usar trylock??? Eu não entendo. Usem apenas lock e unlock. No enunciado
+eu não cito essa chamada, ou cito? De onde vem isso?
+
+  "Vocês acham essa modificação/implementação do IC3 válida para multicores?"
+
+E por que a versão da implementação que eu passei não seria válida para
+multicores? O que daria errado em multicores?
+
+PROC_1 1 pthread_mutex_lock(&mutexA);                   // Tenta travar o mutexA
+2 while (pthread_mutex_trylock(&mutexB))    // Espera até que mutexB de unl
+
+Tente não passar a resposta das avaliações para os demais alunos, ok?
+
+  "Com mutex é possível prever probabilísticamente os resultados finais."
+
+Errado. Se é para trabalhar com probabilidades, então sincronização não é
+necessária. As therads são sincronizadas para ELIMINAR completamente a
+aleatoriedade. Pode-se prever de forma determinística.
+
+  "  Outra situação é que se ambos os ++(*ptr) e --(*ptr) estão sobre a guarda
+  de mutexes lock e unlock, então esses mesmos irão sinalizar para a SO que o
+  escalonador preemptivo não deve trocar o contexto da Thread A para a Thread B
+  quando o Temporizador der um tick() interrompendo a SO para que ela troque o
+  contexto do fluxo de execução.¹"
+
+Essa afirmação saiu da referência 1? Vejam em que contexto isso foi dito, pois
+essa afirmação está errada!
+
+O mutex não sinaliza absolutamente nada para o escalonador.
+
+"Se a Thread A está no meio da execução de ++(*ptr) e o Sistema Operacional
+troca o contexto de execução para a Thread B é porquê não existe Trava de
+segurança (Mutex) impedindo que o Contexto seja trocado, pelo menos na região
+que é crítica para a operação de incremento da variável global, assim como a de
+decremento.¹"
+
+Isso veio de uma bibliografia (1)? Isso também está errado! Mesmo com mutexes é
+possível SIM fazer a troca de contexto de uma thread para outra no meio de uma
+região crítica, principalmente em multicores. Por quê?
+
+  "Condição de Corrida é um termo usado para designar uma operação de escrita
+  por Threads sobre um mesmo local de memória que não está protegido por
+  Mutexes."
+
+Ess afirmação também esta errada. Haveria condição de corrida se o local estive
+protegido por semáforos, monitores ou troca de mensagens?
+
+  "Outra coisa a se considerar é que quando Threads são inicializadas o SO toma
+  controle sobre suas Threads e irá ordenar aleatóriamente a execução delas."
+
+Errado. A ordem não é aleatória!
+
+  "Elas poderão inclusive serem executadas a velocidades diferentes.²"
+
+O que é "velocidade de execução?" É a frequência do processador que as executa?
+Se for, então sim, threads podem ser execujtadas por CPU com frequências de
+operação diferentes, ou a frequência pode mudar com o trmpo (ACPI habilitado)
+
+  "Sem mutex não é possível prever os resultados finais."
+
+Essa afirmação é limitada. E sem mutex e com semenáforos? seria possíve prever?
+Sim. 
