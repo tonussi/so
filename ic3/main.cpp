@@ -1,158 +1,62 @@
 #include <iostream>
 #include <pthread.h>
 
-/**
-  \1 Criar um aplicativo que gere duas threads
-
-  \2 Uma delas (racing) deve implementar uma variável global 100 vezes.
-
-  \3 Enquanto a outra (racing) deve decrementar essa mesma variável 100 vezes.
-
-  \4 No final o valor dessa variável deve ser apresentado.
-
-  \5 A variável global deve ser acessada para escrita com condição de exclusão
-     mutua.
-
-  \6 +6.1 pthread_mutex_lock,
-     +6.2 pthread_mutex_unlock,
-     +6.3 pthread_mutex_init,
-     +6.4 pthread_create,
-     +6.5 thread_join,
-     +6.6 pthread_mutex_destroy
-
-  \7 +7.1 pthread_t
-     +7.2 pthread_mutex_t
-
-
-  Observação: Do jeito que o enunciado está escrito, eu extraí que a princípio
-  não se sabe quem das threads está incrementando e qual está decrementando.
-  Ou seja, o sistema é caótico.
-
-  Na implementação computacional 1 (IC 1) o que acontecia com a variável global
-  count quando ela era incrementada pelos diferentes processos? O mesmo vai
-  acontecer agora quando a variável global x for incrementada e decrementada
-  pelas diferentes threads? Qual é o valor esperado para a variável x após o
-  término do aplicativo? Se não houver mutex, qual será o valor final da
-  variável global x (ou sua distribuição de probabilidade)?
-  
-  // Observação: Uma thread pertence a um processo, e não que ela "está" num processo.
-  // As threads só "disputam" por local de memória ao tentar acesso a uma região crítica.
-
-  No IC1 a variável count não era global. Porém como se tratava de criação de
-  processos filhos, cujas funções era incrementar uma variável count e depois
-  retornar o valor do incremento, a variável count bem como todo o resto do
-  programa era duplicado para outro local da memória. Uma vez copiado o SO
-  tomava controle sobre os processos e os executava conforme achasse melhor
-  escalonando, trocando contexto, etc. Uma vez que cada processo contava um em
-  sua própria cópia de count, essa mesma ia de 0 para 1, pois 0+1=1. Uma vez
-  que todos os filhos fizeram 0+1=1 e retornaram count=1. Existe ainda o
-  processo pai que tinha a funcionalidade de esperar que todos os filhos fossem
-  encerrados e uma vez encerrados atribuia a um somador o valor de retorno de
-  seu processo filho que deve ser count=1. Somando todos os valores de retorno
-  de seus processos filhos, a variável sum deve ter o valor 5 armazenado nela.
-  Os filhos não competem entre si por memória, e entre os filhos não há corrida
-  para ver quem incrementa sobre a variável count, pois cada processo é uma
-  cópia do processo pai (com pid diferente) e está executando paralelamente se
-  possível e em outro local da memória.
-  
-  // Observação: Está errado dizer que outra thread pode acessar para leitura e
-  // não para gravação. Quando você faz lock no mutex você está bloqueando apenas
-  // as threads que farão gravação, e não leitura? É claro que não.
-
-  Já nesse exercício do IC3 o caso é diferente. As threads estão no mesmo
-  processo disputando pelo mesmo local na memória. Quando uma thread se atrela
-  àquele local de memória que diz respeito à variável global count a outra
-  thread pode tentar acessar para leitura esse local, mas não pode acessar para
-  gravação, isto é, ela deverá ficar tentando try { ... } catch {
-  std::exception &e { ... } até que a outra thread sinalize uma flag dizendo
-  que o local de memória está livre para ser gravado por outrem, e vice versa.
-
-  Exemplo onde dois processadores disputam pelo mesmo local na memória:
-
-  Vocês acham essa modificação/implementação do IC3 válida para multicores?
-
-  PROC_1
-  1 pthread_mutex_lock(&mutexA);              // Tenta travar o mutexA
-  2 while (pthread_mutex_trylock(&mutexB))    // Espera até que mutexB de unlock
-  3 {
-  4    pthread_mutex_unlock(&mutexA);         // Libera o mutexA para evitar Deadlock
-  5    pthread_mutex_lock(&mutexA);           // Trava o mutexA
-  6 }
-  7 ++(*ptr);                                 // Faz o incremento
-  8 pthread_mutex_unlock(&mutexA);            // Destrava o mutexA
-  9 pthread_mutex_unlock(&mutexB);            // Destrava o mutexB
-
-  PROC_2
-  1 pthread_mutex_lock(&mutexB);
-  2 while (pthread_mutex_trylock(&mutexA))
-  3 {
-  4    pthread_mutex_unlock(&mutexB);
-  5    pthread_mutex_lock(&mutexB);
-  6 }
-  7 --(*ptr);
-  8 pthread_mutex_unlock(&mutexB);
-  9 pthread_mutex_unlock(&mutexA);
-
-  Com mutex é possível prever probabilísticamente os resultados finais.
-  Se as regiões críticas são protegidas por mutexes então eu consigo saber que
-  ou a sequẽncia de execução é ++(*ptr) seguida de --(*ptr) OU é o contrário.¹
-
-  Outra situação é que se ambos os ++(*ptr) e --(*ptr) estão sobre a guarda de
-  mutexes lock e unlock, então esses mesmos irão sinalizar para a SO que o
-  escalonador preemptivo não deve trocar o contexto da Thread A para a Thread B
-  quando o Temporizador der um tick() interrompendo a SO para que ela troque o
-  contexto do fluxo de execução.¹ Se a Thread A está no meio da execução de
-  ++(*ptr) e o Sistema Operacional troca o contexto de execução para a Thread B é
-  porquê não existe Trava de segurança (Mutex) impedindo que o Contexto seja
-  trocado, pelo menos na região que é crítica para a operação de incremento da
-  variável global, assim como a de decremento.¹
-
-  Condição de Corrida é um termo usado para designar uma operação de escrita
-  por Threads sobre um mesmo local de memória que não está protegido por
-  Mutexes. Se esse local de memória está devidamente protegido com exclusão
-  mutua então não deverá ocorrer condição de corrida (race condition).¹
-  Outra coisa a se considerar é que quando Threads são inicializadas o SO toma
-  controle sobre suas Threads e irá ordenar aleatóriamente a execução delas.
-  Elas poderão inclusive serem executadas a velocidades diferentes.²
-
-  Sem mutex não é possível prever os resultados finais. Eu não consigo prever
-  com exatidão quem que segue quem, se é ++(*ptr) ou --(*ptr), ou o contrário.
-  ou dois ++(*ptr) seguidos e depois 3 --(*ptr) seguidos. Eu não posso acreditar
-  que a SO vai especialmente cuidar de regiões críticas para mim. Eu tenho que
-  me preocupar em programar corretamente para que a SO não execute código que
-  acessa memória sem regras.
-
-  Referências
-  ¹ Race Conditions - Revisited
-    <https://www.cs.mtu.edu/~shene/NSF-3/e-Book/RACE/overview.html>
-
-  ² POSIX thread (pthread) libraries - Thread Pitfalls
-    <http://www.yolinux.com/TUTORIALS/LinuxTutorialPosixThreads.html>
- */
-
 using namespace std;
 
 /* declare a mutex */
-pthread_mutex_t mymutexA, mymutexB;
+/**
+ * Para esse exercício não precisa mais que duas mutex.
+ */
+
+pthread_mutex_t mymutexA;
+// [its not necessary] pthread_mutex_t mymutexB;
+
+/**
+ * Quando o processo main desse programa é criado com seu pid específico
+ * e prioridade normal. Duas Threads são criadas e elas estão contidas
+ * nesse processo e não fora dele.
+ *
+ * A região crítica em questão é a região à qual se identifica acesso via
+ * ponteiro (nesse caso *ptr) para um mesmo local de memória. É obviu que
+ * nesse exemplo as threads não poderão GRAVAR ao mesmo tempo no mesmo
+ * local de memória, isso acarretaria em uma incoerência de dados caótica.
+ *
+ *
+ * @see
+ * @link https://moodle.ufsc.br/mod/forum/discuss.php?d=266604
+ */
 
 void *inc_(void *void_ptr)
 {
 	/* increment x to 100 */
-	int *ptr = (int *)void_ptr;
+	int *ptr = (int*) void_ptr;
 	int i=0;
 	for (; i<100; i++)
 	{
 		/* enter critical region */
+		/**
+		 * Essa funcionalidade da biblioteca pthreads
+		 * tenta bloquear o mutex, se o mutex já está
+		 * BLOQUEADO, a thread chamadora irá ter que
+		 * esperar até que o mutex fique liberado para uso
+		 *
+		 * Isso vai acontecer com a Thread B tentando bloquear
+		 * a Thread A, a Thread B vai esperar o mymutexA ficar
+		 * liberado até que ela possa utilizá-lo.
+		 *
+		 * Eu comentei a parte com while e trylock
+		 * pois ela não é necessária para o IC3
+		 */
 		pthread_mutex_lock(&mymutexA);
-		while(pthread_mutex_trylock(&mymutexB)) {
-		    pthread_mutex_unlock(&mymutexA);
+		// while(pthread_mutex_trylock(&mymutexB)) {
+		    // pthread_mutex_unlock(&mymutexA);
 		    /* stall region */
-		    pthread_mutex_lock(&mymutexA);
-		}
+		    // pthread_mutex_lock(&mymutexA);
+		// }
 		++(*ptr);
-		cout << "Thread(A) está Incrementando" << endl;
+		// cout << "Thread(A) está Incrementando: " << *ptr << endl;
 		pthread_mutex_unlock(&mymutexA);
-		pthread_mutex_unlock(&mymutexB);
+		// pthread_mutex_unlock(&mymutexB);
 		/* leave critical region */
 	}
 	cout << "increment finished" << endl;
@@ -166,17 +70,34 @@ void *dec_(void *void_ptr)
     int i=0;
     for (; i<100; i++)
     {
+
+        /**
+         *
+         * Existe um problema aqui que é o seguinte
+         * se você não colocar proteção alguma ambas as threads
+         * executam APARENTEMENTE normal, pois mesmo que a exec.
+         * delas seja atrapalhada, uma incrementará até 100
+         * e a outra decrementará até 0; Nenhum problema aparente
+         * surge.
+         *
+         * O único papel aqui dos mutex é ORDENAR a execução das Threads.
+         *
+         * Só que aí sim, quando você ORDENA a ordem de execução das Threads
+         * você garante uma certa segurança no acesso à memória.
+         *
+         */
+
 		/* enter critical region */
-		pthread_mutex_lock(&mymutexB);
-		while(pthread_mutex_trylock(&mymutexA)) {
-		    pthread_mutex_unlock(&mymutexB);
+		pthread_mutex_lock(&mymutexA);
+		// while(pthread_mutex_trylock(&mymutexA)) {
+		    // pthread_mutex_unlock(&mymutexB);
 		    /* stall region */
-		    pthread_mutex_lock(&mymutexB);
-		}
+		    // pthread_mutex_lock(&mymutexB);
+		// }
 		--(*ptr);
-		cout << "Thread(A) está Decrementando" << endl;
-		pthread_mutex_unlock(&mymutexB);
+		// cout << "Thread(B) está Decrementando: " << *ptr << endl;
 		pthread_mutex_unlock(&mymutexA);
+		// pthread_mutex_unlock(&mymutexA);
 		/* leave critical region */
 	}
 	cout << "decrement finished" << endl;
@@ -193,10 +114,61 @@ int main()
     pthread_t inc_thread, dec_thread;
 
     /* init mutexex */
-    mymutexA = PTHREAD_MUTEX_INITIALIZER;
-    mymutexB = PTHREAD_MUTEX_INITIALIZER;
+    /**
+     * Versões antigas do padrão POSIX só se usava inicializadores estáticos
+     * Porém ainda se usa PTHREAD_MUTEX_INIT.. mesmo em contextos onde mais
+     * tarde se usa a palavra chave 'auto' para buscar um tipo de dado auto-
+     * maticamente. Em tempo de execução com inicializadores estáticos
+     * eu posso ter certeza de que o mutex foi inicializado.
+     *
+     * Hoje em dia o pessoal usa mais inicializador de mutexes dinâmico
+     * que para certos contextos é mais viável.
+     *
+     * Se eu usasse pthread_mutex_init (&mymutex, NULL); Eu estaria fazendo
+     * a mesma coisa, porém dinâmicamente. A diferença é que no lugar de NULL
+     * eu poderia setar coisas diferentes como:
+     *
+     *
+     */
 
-    /* create a first thread which executes inc_(&x) */
+    // Aqui se você não passar o endereço dos mutexes,
+    // seu código nunca irá funcionar.
+
+    /**
+     * Caso você estiver trabalhando com uma
+     * struct objMutexes { pthread_mutex_t mymutexA, mymutexB; }
+     * você poderia, de certa forma, fazer &obj->mymutexA, mas
+     * ainda tera que passar o endereço da variável.
+     *
+     * pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr);
+     *
+     * Se um pthread_mutex_init foi chamado então
+     * um pthread_mutex_destroy deverá ser chamado
+     * até o termino da thread.
+     */
+    pthread_mutex_init (&mymutexA, NULL);
+
+    /**
+     * passing this CONSTANT called PTHREAD_MUTEX_INITIALIZER is another
+     * way to start initiate the mutex
+     */
+
+    // mymutexA = PTHREAD_MUTEX_INITIALIZER;
+
+    // [its not necessary] pthread_mutex_init (&mymutexB, NULL);
+
+    // mymutexB = PTHREAD_MUTEX_INITIALIZER;
+
+    /**
+     * create a first thread which executes inc_(&x)
+     * int pthread_create(pthread_t            *thread,
+     *                    const pthread_attr_t *attr,
+     *                    void                 *(*start_routine) (void*),
+     *                    void                 *arg);
+     * Criação de duas threads 'joinable'.
+     * Se uma thread é 'joinable' então outra
+     * thread pode chamar pthread_join
+     */
     status_inc_thread = pthread_create(&inc_thread, NULL, inc_, &x);
     if (status_inc_thread) {
         cerr << "Error - pthread_create() return code: " << status_inc_thread << endl;
@@ -208,18 +180,38 @@ int main()
         cerr << "Error - pthread_create() return code: " << status_dec_thread << endl;
     }
 
-
-
-    /* wait for the first thread to finish */
+    /**
+     * wait for the first thread to finish
+     * pthread_join (pthread_t thread, void **value_ptr);
+     * A funcionalidade pthread_join suspende a execução a thread chamada
+     * até que a thread finalmente termina. A não ser que a thread já
+     * terminou.
+     *
+     * A funcionalidade join pode levantar erros também:
+     * Um deles que é importânte cuidar é de DEADLOCK
+     *
+     * [EDEADLK] Um deadlock foi detectado.
+     *
+     * Exemplo conceitual que esse conjunto de 2 joins poderia
+     * levantar é que quando duas threads tentam juntar-se uma a outra
+     * ocorre DEADLOCK ( ver man pthread_join )
+     *
+     * [EINVAL] Thread não é do tipo 'joinable'
+     *
+     */
     pthread_join(inc_thread, NULL);
 
-
     /* wait for the second thread to finish */
+    // pthread_join (pthread_t thread, void **value_ptr);
     pthread_join(dec_thread, NULL);
 
     /* destroy mutex */
+    /* Um mutex pode ser destruído imediatamente após seu UNLOCK
+       do contrário não faz sentido destruir um mutex durante o seu LOCK */
     pthread_mutex_destroy(&mymutexA);
-    pthread_mutex_destroy(&mymutexB);
+
+
+    // [its not necessary] pthread_mutex_destroy(&mymutexB);
 
     cout << "x: " << x << endl;
     return 0;
