@@ -48,6 +48,10 @@ sem_t basket;
 // this is the number of itens in the basket
 #define BALL_N 3
 
+// true: initiates with resource
+// false: do not initiates with the resources
+bool KIDS[PIDCHILDS_N] = {true, true, true, false, false, false, false};
+
 // this is the running child thread (we will start 7 of these to race)
 void *child (void *void_ptr) {
 
@@ -55,6 +59,7 @@ void *child (void *void_ptr) {
 
   for (unsigned short i=1; i<=5; i++) {
     cout << "Child " << *childNum << " wants to play with the ball for the " << i << "th time" << endl;
+
     /* if the child has no ball, need to take one from the basket if there is one, or will wait until there is a ball in the basket */
     cout << " Child " << *childNum << " wants to take a ball from the basket" << endl;
 
@@ -69,12 +74,16 @@ void *child (void *void_ptr) {
        if the semaphore value is currently zero, then the calling thread shall not
        return from the call to sem_wait until it either locks the semaphore or the
        call is interrupted by a signal.
-     */
-    sem_wait(&basket);
+    */
+    if (KIDS[*childNum] == false) {
+        sem_wait(&basket);
+        KIDS[*childNum] = true;
+    }
 
     /* once the child has a ball, he/she starts to play */
     cout << "  Child " << *childNum << " is playing with the ball" << endl;
     /* play with the ball for 1 second */
+
     sleep(1);
     
     cout << "  Child " << *childNum << " wants to leave the ball in the basket" << endl;
@@ -89,12 +98,16 @@ void *child (void *void_ptr) {
 
        to put in simple words:
             it increments the semaphore counter and wakes up
-            a blocked process waiting on the semaphore, if any*/
-    sem_post(&basket);
+            a blocked process waiting on the semaphore, if any */
+
+    if (KIDS[*childNum] == true) {
+        sem_post(&basket);
+        KIDS[*childNum] = false;
+    }
+
   }
   cout << "Child " << *childNum << " will no longer play" << endl;  
   /* exit the thread*/
-  
 }
 
 int main() {
@@ -116,15 +129,22 @@ int main() {
     /* sem_init will get the semaphore to start  */
     semaphore_stats = sem_init(&basket, 0, BALL_N);
 
-    printf("this should be 0 (same as no errors) stats={%d}\n", semaphore_stats == 0);
+    // printf("this should be 0 (same as no errors) stats={%d}\n", semaphore_stats == 0);
 
     /* create 7 threads for the children, passing to each one a different number (child 0 to 6) */
     // we will create a array of 'kids' to play they will have the values from 0 to 6
     /* kids ids for threads have a distinct reference */
+
+    //
+    // This way we force the 3 first threads to take a ball if the data structure has 3 trues
+    // for the 3 first threads
+    //
+
     int id[] = {0, 1, 2, 3, 4, 5, 6};
     for (int k = 0; k < PIDCHILDS_N; ++k) {
-        if (k < 3) {
+        if (k < 3 && KIDS[k] == true) {
             pthread_create(&kids[k], NULL, child, (void *) &id[k]);
+            sem_wait(&basket);
         } else {
             pthread_create(&kids[k], NULL, child, (void *) &id[k]);
         }
@@ -143,7 +163,7 @@ int main() {
     /* destroy semaphore because this is the end of the program */
     semaphore_stats = sem_destroy(&basket);
 
-    printf("this should be 0 (same as no errors) stats={%d}\n", semaphore_stats == 0);
+    // printf("this should be 0 (same as no errors) stats={%d}\n", semaphore_stats == 0);
     
     cout << "The kindengarten is closed" << endl;
 
@@ -172,4 +192,3 @@ int main() {
         to join and finish.
     */
 }
-
