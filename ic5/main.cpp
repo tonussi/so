@@ -126,11 +126,10 @@ int main ()
     /*! Obter os limites atuais deste processo */
 
     /**
-     * int prlimit 	(                  __pid_t pid,
-	 *     enum __rlimit_resource      resource,
-	 *     const struct rlimit *  	new_rlimit,
-	 *     struct rlimit *  	old_rlimit
-	 * )
+     * \param __pid_t:           a process pid
+	   * \param __rlimit_resource: resource
+	   * \param struct rlimit:     new_rlimit
+	   * \param struct rlimit:     old_rlimit
      */
     if (prlimit(pid, RLIMIT_CPU, NULL, &oldLimitTime) == -1) {
         cerr << "prlimit-2" << endl;
