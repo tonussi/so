@@ -34,16 +34,16 @@ void Queue::insert(Queue::Element * elem) {
 		head()->next(elem);
 		head()->prev(elem);
 		elem->next(elem);
-		elem->prev(elem);
+		elem->prev(elem);		
 	}
 	else
 	{
 		Element * aux = head();
 		do
 		{
-			aux = aux->next();
+			aux = aux->next();				
 			if (aux == elem)
-				throw 2;
+				throw 2;				
 		} while (aux != head()->prev());
 		aux = head()->prev();
 		aux->next(elem);
@@ -62,9 +62,9 @@ Queue::Element * Queue::remove() {
 		throw 1;
 	Element * aux = head()->next();
 	if (length() == 1)
-	{
+	{								
 		head()->prev(0);
-		head()->next(0);
+		head()->next(0);			
 	}
 	else
 	{
@@ -72,7 +72,7 @@ Queue::Element * Queue::remove() {
 		aux->next()->prev(head()->prev());
 		head()->prev()->next(head()->next()->next());
 		head()->next(head()->next()->next());
-	}
+	}		
 	_length--;
 	return aux;
 }
